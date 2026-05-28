@@ -46,6 +46,31 @@ When browser control is available, use it for visible UI confirmation:
 - After each save, confirm that Unit4 shows the expected status or saved rows.
 - Keep a short audit trail in the response: what was entered, changed, skipped, and still needs attention.
 
+### Dedicated Chrome Profile
+
+If no controllable Unit4/UBW browser session is already available, open a dedicated Chrome instance for this skill before asking the user to do manual entry.
+
+Use `scripts/open-unit4-chrome.sh` from this skill directory:
+
+```bash
+scripts/open-unit4-chrome.sh "$UNIT4_URL"
+```
+
+Behavior:
+
+- Creates the profile if missing.
+- Uses a dedicated profile directory at `${CODEX_HOME:-$HOME/.codex}/browser-profiles/unit4-ubw` by default.
+- Keeps Unit4 cookies and SSO state out of the skill repository.
+- Starts Chrome with remote debugging on port `9224` by default, so browser automation can attach when available.
+
+Options:
+
+```bash
+scripts/open-unit4-chrome.sh --profile-dir "$HOME/.codex/browser-profiles/unit4-ubw" --port 9224 "$UNIT4_URL"
+```
+
+When running in a sandboxed environment, opening Chrome may require user approval because it starts a GUI application and writes to the browser profile directory. If login, SSO, or MFA is required, stop and let the user complete those steps in the Chrome window.
+
 ## Data Preparation
 
 When the user provides raw notes, calendar items, commits, or work summaries, convert them into a proposed timesheet table before entering anything:
