@@ -1,0 +1,4 @@
+interface:
+  display_name: "Unit4 Timesheets"
+  short_description: "Work with Unit4 timesheet entry and review"
+  default_prompt: "Use $unit4-timesheets to help me review and enter this week's Unit4 timesheet."
