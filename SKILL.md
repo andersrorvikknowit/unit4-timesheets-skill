@@ -57,23 +57,27 @@ When browser control is available, use it for visible UI confirmation:
 
 If no controllable Unit4/UBW browser session is already available, open a dedicated Chrome instance for this skill before asking the user to do manual entry.
 
+Do not ask the user for the Unit4/UBW URL during initial setup. The Knowit production UBW URL is fixed for this skill: `https://ubw.unit4cloud.com/se_kno_prod_web/`.
+
 Use `scripts/open-unit4-chrome.sh` from this skill directory:
 
 ```bash
-scripts/open-unit4-chrome.sh "$UNIT4_URL"
+scripts/open-unit4-chrome.sh
 ```
 
 Behavior:
 
 - Creates the profile if missing.
+- Opens `https://ubw.unit4cloud.com/se_kno_prod_web/` by default.
 - Uses a dedicated profile directory at `${CODEX_HOME:-$HOME/.codex}/browser-profiles/unit4-ubw` by default.
 - Keeps Unit4 cookies and SSO state out of the skill repository.
 - Starts Chrome with remote debugging on port `9224` by default, so browser automation can attach when available.
+- Use a positional URL or `UNIT4_URL` only when the user explicitly asks for another UBW environment.
 
 Options:
 
 ```bash
-scripts/open-unit4-chrome.sh --profile-dir "$HOME/.codex/browser-profiles/unit4-ubw" --port 9224 "$UNIT4_URL"
+scripts/open-unit4-chrome.sh --profile-dir "$HOME/.codex/browser-profiles/unit4-ubw" --port 9224
 ```
 
 When running in a sandboxed environment, opening Chrome may require user approval because it starts a GUI application and writes to the browser profile directory. If login, SSO, or MFA is required, stop and let the user complete those steps in the Chrome window.

@@ -7,17 +7,20 @@ Usage: open-unit4-chrome.sh [--profile-dir DIR] [--port PORT] [URL]
 
 Opens Google Chrome with a dedicated Unit4/UBW user data directory.
 If the profile directory does not exist, it is created.
+When no URL argument or UNIT4_URL override is provided, it opens:
+  https://ubw.unit4cloud.com/se_kno_prod_web/
 
 Environment:
-  UNIT4_URL                 URL to open when no URL argument is provided.
+  UNIT4_URL                 URL override when no URL argument is provided.
   UNIT4_CHROME_PROFILE_DIR  Profile directory override.
   UNIT4_CHROME_DEBUG_PORT   Remote debugging port override.
 USAGE
 }
 
+default_url="https://ubw.unit4cloud.com/se_kno_prod_web/"
 profile_dir="${UNIT4_CHROME_PROFILE_DIR:-${CODEX_HOME:-$HOME/.codex}/browser-profiles/unit4-ubw}"
 debug_port="${UNIT4_CHROME_DEBUG_PORT:-9224}"
-url="${UNIT4_URL:-}"
+url="${UNIT4_URL:-$default_url}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -93,6 +96,7 @@ esac
 
 cat <<EOF
 Opened Chrome for Unit4/UBW.
+URL: $url
 Profile: $profile_dir
 Remote debugging: http://127.0.0.1:$debug_port
 EOF
