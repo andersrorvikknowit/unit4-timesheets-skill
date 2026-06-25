@@ -92,6 +92,35 @@ When browser control is available, use it for visible UI confirmation:
 - After each save, confirm that Unit4 shows the expected status or saved rows.
 - Keep a short audit trail in the response: what was entered, changed, skipped, and still needs attention.
 
+### Learned Unit4 UI Behaviors
+
+These observations come from the Knowit Unit4/UBW production UI and should
+guide both Chrome-extension and fallback automation.
+
+- Unit4 time-entry number fields expect Norwegian decimal commas in the visible
+  row editor. Fill `0,5`, `1,0`, `7,5`, and similar values instead of `0.5`,
+  `1.0`, or `7.5`. Dot decimals may be rejected or silently revert to `0`.
+- The period summary displays both the entered total and expected total, for
+  example `34,50 / 37,50 timer`. Read this back after each batch and compare it
+  with the intended weekly total.
+- Outstanding periods may be visually clickable but poorly exposed in the
+  accessibility tree. If a normal role/text click does not open the period,
+  inspect the DOM around the visible period text such as `202625 - Forfaller`
+  and target the pending-period button/container that also contains the exact
+  date range.
+- The work-task chooser lists favorite/recent rows such as `Møter`, `Salg`,
+  `Fag - gruppe, kurs, konferanse`, and `Corvus - Databricks`. Select rows from
+  that chooser only; avoid matching rows already present in the timesheet grid.
+- After selecting a work task, Unit4 opens a row editor in the grid. The visible
+  fields normally include `description`, `regValue1` through `regValue7`,
+  `Tidskode`, and unit. `regValue1` maps to Monday, `regValue2` Tuesday, and so
+  on through `regValue7` Sunday.
+- Commit a row by moving focus out of the edited hour field, commonly with
+  `Enter` or `Tab`, then read the grid/period total before adding the next row.
+- Saving as draft should show a success dialog like
+  `Timelisten har blitt lagret som et utkast`. Close that dialog after reading
+  it. This is distinct from `Sende til godkjenning`, which must not be clicked.
+
 ### Codex Chrome Extension First
 
 When the Codex Chrome extension is available, use it as the default browser
@@ -112,6 +141,19 @@ All submit/approve/delete restrictions in Absolute Rules still apply when using
 the Chrome extension. In particular, do not use Playwright, DOM CUA, CUA,
 `evaluate()`, or any extension-backed browser API to click `Send inn`,
 `Sluttfør`, `Godkjenn`, or equivalent controls.
+
+When using the Chrome extension, prefer this operational loop:
+
+1. Claim an existing Unit4 tab or open the fixed UBW URL.
+2. Open `Startsider` > `Timelister`.
+3. Verify the exact period number, date range, status, entered total, and
+   expected total before editing.
+4. Open the requested current or outstanding period based on the date range.
+5. Add rows one at a time from the work-task chooser, fill `description` and
+   the correct `regValueN` field using comma decimals, commit the row, and read
+   back the total.
+6. Click only `Lagre som utkast` when the draft should be saved, then verify the
+   success dialog and leave submission to the user.
 
 ### CLI / Remote-Debug Fallback
 
@@ -175,14 +217,19 @@ scripts/unit4-browser.mjs diagnostics
 scripts/unit4-browser.mjs open-timesheets
 scripts/unit4-browser.mjs open-current-period
 scripts/unit4-browser.mjs frame-snapshot
-scripts/unit4-browser.mjs add-line --task "Corvus - Databricks" --description "Workshop Corvus." --day tue --hours 7.5
-scripts/unit4-browser.mjs add-lines --expect-total 20.0 --json '[{"task":"Corvus - Databricks","description":"Workshop Corvus.","day":"tue","hours":7.5}]'
+scripts/unit4-browser.mjs add-line --task "Corvus - Databricks" --description "Workshop Corvus." --day tue --hours 7,5
+scripts/unit4-browser.mjs add-lines --expect-total 20,0 --json '[{"task":"Corvus - Databricks","description":"Workshop Corvus.","day":"tue","hours":"7,5"}]'
 scripts/unit4-browser.mjs click-save-draft
 ```
 
 `open-timesheets` intentionally opens `Startsider` > `Timelister`; use it for ordinary time entry to avoid accidentally opening `Dine timelistedetaljer`.
 
-Prefer `add-line` or `add-lines` for entry work. They commit the active row, open a fresh work-task selector, choose from the selector overlay only, add the row, fill description and hours, commit the row, and then read back the entered lines. Use `--expect-total` with `add-lines` when the expected total is known from the GUI.
+Prefer `add-line` or `add-lines` for entry work. They commit the active row,
+open a fresh work-task selector, choose from the selector overlay only, add the
+row, fill description and hours, commit the row, and then read back the entered
+lines. Use comma decimals for hours and `--expect-total` values because the
+visible Unit4 editor expects Norwegian decimal formatting. Use `--expect-total`
+with `add-lines` when the expected total is known from the GUI.
 
 Unit4/UBW uses ExtJS row editors and wide grid layouts. In a narrow Chrome window the rendered DOM can appear shifted left or blurred behind overlays, and raw screen coordinates may no longer match the visible controls. Prefer `scripts/unit4-browser.mjs` commands that use ExtJS component state, row-editor `completeEdit()`, work-task grid selection, and store readback. Avoid ad hoc coordinate clicks for row entry unless inspecting a visible one-off dialog.
 

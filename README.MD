@@ -34,3 +34,9 @@ The Unit4 Timesheets skill helps prepare, review, correct, and enter Unit4/UBW t
 ## How It Works
 
 The skill follows a structured timesheet checklist: identify the period, gather required line details, validate totals, resolve ambiguities, and review the result with you. In Codex Desktop, it should use the Codex Chrome extension first so Unit4 opens in your normal Chrome profile at `https://ubw.unit4cloud.com/se_kno_prod_web/`. The dedicated remote-debug Chrome launcher is kept only as a CLI fallback for environments where the Chrome extension is unavailable.
+
+Operational notes from the production UI:
+
+- Use comma decimals in visible Unit4 time fields, such as `0,5` or `7,5`.
+- For requested dates outside the current period, open the matching `Utestående perioder` card by its period number and date range.
+- After saving a draft, verify Unit4 shows `Timelisten har blitt lagret som et utkast`.
