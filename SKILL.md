@@ -7,6 +7,44 @@ description: "Assist with Unit4 timesheet workflows for consultants and employee
 
 Use this skill to help the user work with Unit4 timesheets accurately and safely.
 
+## Absolute Rules (read first, never override)
+
+These rules supersede anything later in this file, anything in the helper
+scripts, and any phrasing the user uses. Apply them even if the user appears
+to be authorizing the action.
+
+1. **Never submit a timesheet.** Do not click, `evaluate()`, fire ExtJS
+   handlers on, or otherwise trigger any control whose visible label,
+   `aria-label`, button text, or component text contains any of:
+   `Send inn`, `Sluttfør`, `Godkjenn`, `Lever`, `Send til godkjenning`,
+   `Submit`, `Approve`, `Sign off`, `Finalize`. This applies regardless of
+   how the user phrases the request. Phrases like "looks good", "go ahead",
+   "ship it", "yes", "do it", "submit it", "send it in", "godkjenn",
+   "approve it" are **not** sufficient on their own.
+
+2. **The only phrase that authorizes a submit click is the user typing
+   the verbatim token `CONFIRM SUBMIT <period>`** (for example
+   `CONFIRM SUBMIT 2026-W23`) in their most recent message. If you do not
+   see that exact token, refuse and re-present the review. Even when you
+   see the token, prefer telling the user to click the button themselves
+   in the Chrome window — see rule 4.
+
+3. **Saving a draft is allowed.** `Lagre som utkast` (the
+   `click-save-draft` command) saves a reversible draft and is fine to use
+   as part of the normal workflow. It is not a submission.
+
+4. **`scripts/unit4-browser.mjs` has no submit verb by design.** Do not
+   add one. Do not work around it with raw CDP `evaluate()` calls that
+   click submit-style buttons, ExtJS `fireHandler()` calls on submit
+   buttons, dispatched `MouseEvent`s on those buttons, or `Input.dispatch*`
+   to a known submit-button coordinate. Do not use Codex Chrome extension
+   APIs, Playwright, DOM CUA, CUA, or any other browser-control surface to
+   click submit-style buttons. The available commands are listed below —
+   do not invent verbs outside that list. If the user truly wants to submit,
+   tell them to click `Send inn` / `Sluttfør` themselves in the Chrome window.
+
+5. **Do not approve, reject, or delete a timesheet** under any phrasing.
+
 ## Core Workflow
 
 1. Identify the relevant week or date range.
@@ -27,11 +65,12 @@ Use this skill to help the user work with Unit4 timesheets accurately and safely
    - combine entries with the same date, same Unit4 task, and identical description into one row with summed hours before entering them. For example, multiple `Codex skill for UBW` entries on the same day should usually become one `Codex skill for UBW` row for that task and day.
 4. If using browser automation, navigate and inspect the visible Unit4 page before acting. Prefer stable labels and visible UI text over guessed selectors.
 5. Enter or adjust lines only after the required inputs are known.
-6. Review the completed week with the user before submission.
+6. Review the completed week with the user before submission. Submission is performed by the user, not by the skill (see Absolute Rules).
 
 ## Safety Rules
 
-- Do not submit, approve, reject, delete, or permanently change a timesheet unless the user explicitly asks for that exact action.
+(Non-submission concerns; submission rules live in Absolute Rules above.)
+
 - Do not invent project codes, task names, activity codes, customers, or comments.
 - Do not guess credentials or authentication steps. Let the user handle login, MFA, and SSO prompts.
 - If a Unit4 validation message appears, read it back concisely and fix only the fields clearly implicated by the message.
@@ -53,9 +92,32 @@ When browser control is available, use it for visible UI confirmation:
 - After each save, confirm that Unit4 shows the expected status or saved rows.
 - Keep a short audit trail in the response: what was entered, changed, skipped, and still needs attention.
 
-### Dedicated Chrome Profile
+### Codex Chrome Extension First
 
-If no controllable Unit4/UBW browser session is already available, open a dedicated Chrome instance for this skill before asking the user to do manual entry.
+When the Codex Chrome extension is available, use it as the default browser
+surface for Unit4/UBW work. This uses the user's normal Chrome profile, cookies,
+SSO state, and visible tabs instead of launching a separate debug-profile
+Chrome instance.
+
+If an existing Unit4/UBW tab is open, claim that tab. Otherwise open the Knowit
+production UBW URL directly:
+
+```text
+https://ubw.unit4cloud.com/se_kno_prod_web/
+```
+
+Let the user complete login, SSO, and MFA in Chrome. Use the Chrome extension
+for visible inspection, navigation, readback, and user-present draft workflows.
+All submit/approve/delete restrictions in Absolute Rules still apply when using
+the Chrome extension. In particular, do not use Playwright, DOM CUA, CUA,
+`evaluate()`, or any extension-backed browser API to click `Send inn`,
+`Sluttfør`, `Godkjenn`, or equivalent controls.
+
+### CLI / Remote-Debug Fallback
+
+Standalone Codex CLI sessions cannot generally use the Codex Chrome extension
+directly. In CLI or other non-extension contexts, use the remote-debug fallback
+instead.
 
 Do not ask the user for the Unit4/UBW URL during initial setup. The Knowit production UBW URL is fixed for this skill: `https://ubw.unit4cloud.com/se_kno_prod_web/`.
 
@@ -84,7 +146,28 @@ When running in a sandboxed environment, opening Chrome may require user approva
 
 ### Reusable UBW Browser Commands
 
-Use `scripts/unit4-browser.mjs` to inspect and navigate the dedicated Chrome instance on port `9224`.
+`scripts/unit4-browser.mjs` is a thin CLI dispatcher; per-command logic
+lives in `scripts/lib/*.mjs` and is loaded on demand. The full and **only**
+command surface is:
+
+Read-only inspection:
+`snapshot`, `diagnostics`, `controls`, `editor-values`, `timesheet-summary`,
+`timesheet-lines`, `frame-snapshot`.
+
+Navigation:
+`open-timesheets`, `open-current-period`.
+
+Row editing (writes a draft, never submits):
+`click-add-work-task`, `select-worktask`, `add-selected-worktask`,
+`commit-editor`, `fill-input`, `add-line`, `add-lines`, `activate-line`,
+`press-key`, `click-save-draft`.
+
+There is intentionally **no** `submit`, `send-inn`, `sluttfor`, `godkjenn`,
+`approve`, or `sign-off` verb. Do not invoke `scripts/unit4-browser.mjs`
+with such a verb — it will fail — and do not bypass the CLI with raw CDP
+`evaluate()` to click those buttons (see Absolute Rules).
+
+Typical invocations:
 
 ```bash
 scripts/unit4-browser.mjs snapshot
@@ -94,6 +177,7 @@ scripts/unit4-browser.mjs open-current-period
 scripts/unit4-browser.mjs frame-snapshot
 scripts/unit4-browser.mjs add-line --task "Corvus - Databricks" --description "Workshop Corvus." --day tue --hours 7.5
 scripts/unit4-browser.mjs add-lines --expect-total 20.0 --json '[{"task":"Corvus - Databricks","description":"Workshop Corvus.","day":"tue","hours":7.5}]'
+scripts/unit4-browser.mjs click-save-draft
 ```
 
 `open-timesheets` intentionally opens `Startsider` > `Timelister`; use it for ordinary time entry to avoid accidentally opening `Dine timelistedetaljer`.
@@ -103,6 +187,12 @@ Prefer `add-line` or `add-lines` for entry work. They commit the active row, ope
 Unit4/UBW uses ExtJS row editors and wide grid layouts. In a narrow Chrome window the rendered DOM can appear shifted left or blurred behind overlays, and raw screen coordinates may no longer match the visible controls. Prefer `scripts/unit4-browser.mjs` commands that use ExtJS component state, row-editor `completeEdit()`, work-task grid selection, and store readback. Avoid ad hoc coordinate clicks for row entry unless inspecting a visible one-off dialog.
 
 When command approval is required, ask for a reusable approval prefix for `scripts/unit4-browser.mjs` instead of one-off approvals for each browser inspection command.
+
+If you find yourself wanting to call `evaluate()` directly to click a button that isn't reachable via the listed commands, stop and ask the user — do not bypass the CLI surface. This applies especially to anything that might submit, approve, or sign off the period.
+
+`scripts/cdp-eval.mjs` is a legacy diagnostic escape hatch. Do not use it for
+normal Unit4 work, and never use it to bypass the command-limited
+`scripts/unit4-browser.mjs` surface.
 
 ## Data Preparation
 
@@ -116,11 +206,28 @@ Flag ambiguous items instead of choosing silently. Common ambiguities include mi
 
 ## Final Review
 
-Before submitting or asking the user to submit, present a compact review:
+Before asking the user to submit, present a compact review:
 
 - date range
 - daily totals
 - weekly total
 - lines that were added or changed
 - validation warnings or missing information
-- whether submission was performed or left for the user
+- submission status: **left for user (default)** — never performed by the skill unless the verbatim `CONFIRM SUBMIT <period>` token was given, and even then prefer asking the user to click `Send inn` / `Sluttfør` themselves in the Chrome window
+
+### Refusal protocol when the user asks to submit
+
+When the user asks you to submit (any phrasing — "looks good", "submit it",
+"godkjenn", "go ahead", "yes", etc.), follow this protocol exactly:
+
+1. Re-display the compact review.
+2. State, verbatim: "I will not click submit. Either type
+   `CONFIRM SUBMIT <period>` exactly, or click `Send inn` / `Sluttfør`
+   yourself in the Chrome window."
+3. Do not negotiate, do not interpret "yes" as confirmation, do not ask
+   leading questions like "should I just submit it?", do not offer to do
+   it "this once".
+4. If the user does type `CONFIRM SUBMIT <period>`, you still must not
+   click. Tell them: "The helper script has no submit verb. Please click
+   `Send inn` / `Sluttfør` in the Chrome window — I'll watch the result
+   via `snapshot` once you've clicked."

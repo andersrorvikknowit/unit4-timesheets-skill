@@ -26,11 +26,11 @@ The Unit4 Timesheets skill helps prepare, review, correct, and enter Unit4/UBW t
 
 ## Safety Boundaries
 
-- The skill does not submit, approve, reject, delete, or permanently change a timesheet unless you explicitly ask for that exact action.
+- The skill does not submit, approve, reject, delete, or permanently change a timesheet. Submission is left for you in the Chrome window after review.
 - It does not invent project codes, task names, activity codes, customers, credentials, or comments.
 - Login, SSO, and MFA remain under your control.
 - Timesheet data is treated as confidential and should not be copied into unrelated files, logs, or messages.
 
 ## How It Works
 
-The skill follows a structured timesheet checklist: identify the period, gather required line details, validate totals, resolve ambiguities, and review the result with you. When browser automation is available, it uses the visible Unit4/UBW interface and the skill's helper scripts to navigate to `Timelister`, inspect the current or outstanding period, add rows, save, and confirm the saved data from Unit4 before reporting back. The browser launcher opens `https://ubw.unit4cloud.com/se_kno_prod_web/` by default, so users do not need to provide the UBW URL on initial setup and the skill should not prompt for it.
+The skill follows a structured timesheet checklist: identify the period, gather required line details, validate totals, resolve ambiguities, and review the result with you. In Codex Desktop, it should use the Codex Chrome extension first so Unit4 opens in your normal Chrome profile at `https://ubw.unit4cloud.com/se_kno_prod_web/`. The dedicated remote-debug Chrome launcher is kept only as a CLI fallback for environments where the Chrome extension is unavailable.
