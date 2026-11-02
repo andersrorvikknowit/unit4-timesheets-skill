@@ -307,6 +307,9 @@ export async function addLine({ task, description, day, hours }) {
   if (!task || !description || !day || hours === undefined) {
     return { ok: false, reason: "Missing required line fields: task, description, day, hours." };
   }
+  if (description.length > 240) {
+    return { ok: false, reason: `Description is ${description.length} chars; UBW rejects the whole save above 255. Keep it at most 240.` };
+  }
 
   const dayInputName = inputNameForDay(day);
   const precommit = await commitActiveEditor();

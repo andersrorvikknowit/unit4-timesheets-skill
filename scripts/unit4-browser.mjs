@@ -28,6 +28,17 @@ const routes = {
   "add-lines":             () => import("./lib/entry.mjs").then((m) => m.addLinesCli(argv)),
   "activate-line":         () => import("./lib/entry.mjs").then((m) => m.activateLineCli(argv)),
   "press-key":             () => import("./lib/entry.mjs").then((m) => m.pressKeyCli(argv)),
+
+  // Shared page helpers (scripts/ubw-page.js); exact task selection by work order + activity.
+  status:                  () => import("./lib/ubw.mjs").then((m) => m.status()),
+  "read-lines":            () => import("./lib/ubw.mjs").then((m) => m.readLines()),
+  "list-tasks":            () => import("./lib/ubw.mjs").then((m) => m.listTasks()),
+  "list-absence-codes":    () => import("./lib/ubw.mjs").then((m) => m.listAbsenceCodes()),
+  "add-work-line":         () => import("./lib/ubw.mjs").then((m) => m.addWorkLineCli(argv)),
+  "add-absence":           () => import("./lib/ubw.mjs").then((m) => m.addAbsenceCli(argv)),
+  "save-draft":            () => import("./lib/ubw.mjs").then((m) => m.saveDraft()),
+  "change-period":         () => import("./lib/ubw.mjs").then((m) => m.changePeriodCli(argv)),
+  "run-plan":              () => import("./lib/ubw.mjs").then((m) => m.runPlanCli(argv)),
 };
 
 if (!routes[command]) {

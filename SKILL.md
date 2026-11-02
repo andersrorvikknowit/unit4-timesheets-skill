@@ -63,6 +63,8 @@ to be authorizing the action.
    - unusually high or low entries
    - if a day totals 8.0 hours or more from raw calendar time, deduct 0.5 hours for lunch before entering billable/work time, unless the user explicitly says lunch is already excluded
    - combine entries with the same date, same Unit4 task, and identical description into one row with summed hours before entering them. For example, multiple `Codex skill for UBW` entries on the same day should usually become one `Codex skill for UBW` row for that task and day.
+   - several entries on the same day and task with different descriptions may also be merged into one row with the descriptions joined, as long as the result stays within the description limit (see Learned Unit4 UI Behaviors).
+   - take the lunch deduction from the day's largest task, and say which row absorbed it.
 4. If using browser automation, navigate and inspect the visible Unit4 page before acting. Prefer stable labels and visible UI text over guessed selectors.
 5. Enter or adjust lines only after the required inputs are known.
 6. Review the completed week with the user before submission. Submission is performed by the user, not by the skill (see Absolute Rules).
@@ -113,8 +115,18 @@ guide both Chrome-extension and fallback automation.
   that chooser only; avoid matching rows already present in the timesheet grid.
 - After selecting a work task, Unit4 opens a row editor in the grid. The visible
   fields normally include `description`, `regValue1` through `regValue7`,
-  `Tidskode`, and unit. `regValue1` maps to Monday, `regValue2` Tuesday, and so
-  on through `regValue7` Sunday.
+  `Tidskode`, and unit. `regValueN` is the N-th dated column of the period, not
+  a fixed weekday. Regular weeks run Monday–Sunday, but month-end splits give
+  6–8 columns and a period can start on a Sunday. Map dates to `regValueN` from
+  the column headers (`status` returns them) every time.
+- Description has a 255-character server limit. Above it, the server rejects
+  the **whole draft save** with HTTP 500 (`MaxLength`), the page can end up in
+  a broken state, and unsaved rows are lost. Values set through ExtJS bypass
+  the field's own limit, so the helpers refuse descriptions over 240 characters.
+  Shorten long descriptions before entry.
+- Comma decimals apply to typed input. Setting the number through the ExtJS
+  field (`setValue`), as the `ubw-page.js` helpers do, accepts dot decimals
+  such as `7.5`.
 - Commit a row by moving focus out of the edited hour field, commonly with
   `Enter` or `Tab`, then read the grid/period total before adding the next row.
 - Saving as draft should show a success dialog like
@@ -154,6 +166,89 @@ When using the Chrome extension, prefer this operational loop:
    back the total.
 6. Click only `Lagre som utkast` when the draft should be saved, then verify the
    success dialog and leave submission to the user.
+
+### Playwright MCP (Chrome Extension Mode)
+
+When a Playwright MCP server runs with `--extension`, it drives the user's own
+Chrome profile through the Playwright MCP Bridge extension. All Absolute Rules
+apply unchanged.
+
+- The first browser call blocks until the user approves the connection in the
+  extension, in the Chrome profile that has their work SSO. If calls hang, ask
+  for that approval; don't ask them to log in again. After a Chrome restart
+  the MCP server reconnects, so retry once the user confirms.
+- `browser_run_code` cannot take arguments. Build a self-contained run file
+  from a plan with `scripts/playwright-run.mjs plan.json out.js` and pass
+  `out.js` as `filename`. Write it under the MCP workspace root, because files
+  (screenshots too) outside the allowed roots are refused. This runner is the
+  sanctioned Playwright surface. It injects `scripts/ubw-page.js`, which has no
+  submit function. Don't hand-write `evaluate()` code that clicks buttons
+  instead.
+- The CLI exposes the same helpers on port 9224 (`status`, `read-lines`,
+  `list-tasks`, `list-absence-codes`, `add-work-line`, `add-absence`,
+  `save-draft`, `change-period`, `run-plan`).
+
+Plan format (shared by `run-plan` and `playwright-run.mjs`; runs in order and
+stops at the first failure):
+
+```json
+[
+  {"op": "expectPeriod", "period": "YYYYWW"},
+  {"op": "addWorkLine", "workOrder": "<from listTasks>", "activity": "<from listTasks, \"\" if none>", "day": 1, "hours": 7.5, "description": "..."},
+  {"op": "saveDraft"},
+  {"op": "addAbsence", "code": "<from listAbsenceCodes>", "day": 4, "hours": 3.5},
+  {"op": "saveDraft"},
+  {"op": "expectDayTotals", "dayTotals": [7.5, 7.5, 7.5, 7.5, 7.5, 0, 0]}
+]
+```
+
+Other ops: `status`, `readLines`, `listTasks`, `listAbsenceCodes`,
+`changePeriod` (`direction` -1/1). Start every writing plan with
+`expectPeriod`, so an unexpected period change (for example the user
+navigating in the same tab) aborts before anything is entered.
+
+### Selecting Work Tasks Exactly
+
+- Identify a task by `workOrder` plus `activity` code from `list-tasks` /
+  `listTasks`, not by text. One work order often has several activities (work,
+  meetings, administration, …), and a substring match (`add-line --task`) can
+  pick the wrong one.
+- `listTasks` covers only the favourites/recent list. For anything else, type
+  into the chooser's search box (`Søk i prosjekt eller …`) keystroke by
+  keystroke; setting the value directly does not trigger the search. If
+  nothing matches, report it and ask how to book it. Don't choose a "close
+  enough" project.
+
+### Learning the User's Mapping
+
+Notes usually use short names for customers and internal categories. Before
+asking, read one or two previous periods (`change-period -1`, then
+`read-lines`) and reuse the task, activity and description style used there.
+A common pattern is one activity for hands-on work and a separate meeting
+activity on the same work order. Ask only when history doesn't settle it, once
+per ambiguous short name. A persistent personal mapping, if wanted, belongs in
+a local file outside this repository (for example
+`~/.config/unit4-timesheets/aliases.json`), never in the skill.
+
+### Absence
+
+Add absence with `Legg til fravær` (`add-absence` / `addAbsence`) using a code
+from `list-absence-codes`, not as a work task. Partial-day absence normally
+fills the gap between worked hours and the day's work plan. State that
+assumption in the review.
+
+### Saving and Verifying
+
+- `save-draft` / `saveDraft` fires the page's own `Lagre som utkast` handler
+  and returns the server response. A real click can be blocked by overlays.
+- Treat a save as done only with `httpStatus` 200, `unsavedCount` 0, and a
+  header (`x.xx / y.yy timer`) that matches the intended total.
+- Save a draft after the work rows, before adding absence or other extras, so
+  a later failure loses less. After a failed save, read the server message,
+  fix the cause, reload the period, check what is actually stored, and re-enter
+  only what's missing.
+- Check the period number after every `Forrige periode` / `Neste periode`. A
+  delayed title update plus a retry can skip a period.
 
 ### CLI / Remote-Debug Fallback
 
@@ -204,6 +299,10 @@ Row editing (writes a draft, never submits):
 `commit-editor`, `fill-input`, `add-line`, `add-lines`, `activate-line`,
 `press-key`, `click-save-draft`.
 
+Shared page helpers (`scripts/ubw-page.js`; exact task selection, draft only):
+`status`, `read-lines`, `list-tasks`, `list-absence-codes`, `add-work-line`,
+`add-absence`, `save-draft`, `change-period`, `run-plan`.
+
 There is intentionally **no** `submit`, `send-inn`, `sluttfor`, `godkjenn`,
 `approve`, or `sign-off` verb. Do not invoke `scripts/unit4-browser.mjs`
 with such a verb — it will fail — and do not bypass the CLI with raw CDP
@@ -224,7 +323,9 @@ scripts/unit4-browser.mjs click-save-draft
 
 `open-timesheets` intentionally opens `Startsider` > `Timelister`; use it for ordinary time entry to avoid accidentally opening `Dine timelistedetaljer`.
 
-Prefer `add-line` or `add-lines` for entry work. They commit the active row,
+Prefer `run-plan` / `add-work-line` with exact `workOrder` + `activity` codes
+for entry work (see "Selecting Work Tasks Exactly"). `add-line` and
+`add-lines` match tasks by text and remain for quick one-offs. They commit the active row,
 open a fresh work-task selector, choose from the selector overlay only, add the
 row, fill description and hours, commit the row, and then read back the entered
 lines. Use comma decimals for hours and `--expect-total` values because the
@@ -250,6 +351,16 @@ Date | Project/Task | Hours | Comment | Notes
 ```
 
 Flag ambiguous items instead of choosing silently. Common ambiguities include missing project, overlapping meetings, unclear internal versus billable work, and comments that are too vague for approval.
+
+Rules for free-form daily notes:
+
+- Overlapping time ranges: count the overlap once and flag it.
+- Entry with a start time but no end time: assume it runs until the next entry, and flag it.
+- Lines like "left early" or "personal errand" with no task: these are not hours. Don't book them unless the user names an absence or flex code.
+- Gaps between entries are breaks. Don't fill them.
+- Free text after the time entries (meeting notes, to-dos, ideas): not hours. Ignore it for the timesheet.
+- Notes may cover several weeks, and the user may resend corrected notes. Recompute from the latest version and diff against what UBW already holds before writing.
+- When the user maps a short name to a task mid-session (for example "use X for Y"), apply it to every later row in the session.
 
 ## Final Review
 

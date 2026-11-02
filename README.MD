@@ -40,3 +40,7 @@ Operational notes from the production UI:
 - Use comma decimals in visible Unit4 time fields, such as `0,5` or `7,5`.
 - For requested dates outside the current period, open the matching `Utestående perioder` card by its period number and date range.
 - After saving a draft, verify Unit4 shows `Timelisten har blitt lagret som et utkast`.
+- Keep line descriptions at or under 240 characters. Above the 255-character server limit, the whole draft save fails.
+- Period columns don't always start on Monday. Map dates from the column headers.
+
+Shared page helpers in `scripts/ubw-page.js` cover both drivers. The CLI exposes them as `status`, `list-tasks`, `add-work-line`, `run-plan` and similar commands, and `scripts/playwright-run.mjs` builds run files for a Playwright MCP server in Chrome extension mode. Tasks are chosen by exact work order and activity code, and none of the helpers can submit.
